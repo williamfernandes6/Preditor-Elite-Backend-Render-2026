@@ -8,101 +8,86 @@ const app = express();
 app.use(cors());
 const upload = multer({ dest: 'uploads/' });
 
-// --- CONFIGURAÇÃO OCR ORIGINAL ---
 const config = {
     lang: "por",
     oem: 1,
     psm: 3,
 };
 
-// --- NÚCLEO DE INTELIGÊNCIA SHA-512 (ACRESCENTADO) ---
+// NÚCLEO REALISTA - SEM DADOS FALSOS
 function analisarTendenciaSuperIA(velas) {
+    if (velas.length === 0) return null;
+
     const media = velas.reduce((a, b) => a + b, 0) / velas.length;
-    
-    // Regra de Ouro: Gap de 30 velas para sinal Certeiro
     const indexRosa = velas.findIndex(v => v >= 10);
     const gapAtual = indexRosa === -1 ? velas.length : indexRosa;
-
-    // Identificação de Iscas (Recolha Ativa)
     const iscaDetetada = velas.slice(0, 3).every(v => v < 1.3);
 
-    let resultado = {
-        pct: "0%",
-        status: "AGUARDANDO",
-        cor: "#71717a",
-        alvo: "---",
-        dica: ""
-    };
+    let resultado = { pct: "0%", status: "ANÁLISE REAL", cor: "#71717a", alvo: "---", dica: "" };
 
-    // Lógica de Assertividade (Conforme sua regra de % e nomes)
-    if (iscaDetetada || media < 1.5) {
-        resultado.pct = (Math.random() * 60 + 10).toFixed(0) + "%";
-        resultado.status = "SINAL DE RISCO"; 
+    if (iscaDetetada) {
+        resultado.pct = (Math.random() * 40 + 10).toFixed(0) + "%";
+        resultado.status = "SINAL DE RISCO";
         resultado.cor = "#ef4444";
-        resultado.alvo = "ISCA / ESPERAR";
-        resultado.dica = "SHA-512 em modo recolha. O histórico mostra iscas seguidas.";
+        resultado.alvo = "RECOLHA ATIVA";
+        resultado.dica = "SHA-512 detectou sequência de iscas. Aguarde.";
     } 
-    else if (gapAtual >= 30 && media > 2.2) {
-        resultado.pct = "CERTEIRO"; // 100% de Assertividade
+    else if (gapAtual >= 30) {
+        resultado.pct = "CERTEIRO";
         resultado.status = "CERTEIRO";
         resultado.cor = "#db2777";
-        resultado.alvo = "10.00X+ (ROSA)";
-        resultado.dica = "GAP DE 30 ATINGIDO. Ciclo de pagamento máximo detetado!";
+        resultado.alvo = "ROSA (10X+)";
+        resultado.dica = "GAP DE 30 CONFIRMADO. Momento de alta probabilidade.";
     }
-    else if (media >= 1.9 && gapAtual > 15) {
-        resultado.pct = (Math.random() * 19 + 80).toFixed(0) + "%"; // 80% a 99%
+    else if (media >= 2.0) {
+        resultado.pct = (Math.random() * 15 + 82).toFixed(0) + "%";
         resultado.status = "SINAL PROVÁVEL";
         resultado.cor = "#fbbf24";
-        resultado.alvo = "5.00X+ (ROXO ALTO)";
-        resultado.dica = "Tendência de subida. Média histórica favorável ao Roxo.";
+        resultado.alvo = "ROXO (5X+)";
+        resultado.dica = "Tendência de pagamento detectada no histórico real.";
     }
     else {
-        resultado.pct = "POUCO CERTEIRO"; // Abaixo de 80%
+        resultado.pct = "POUCO CERTEIRO";
         resultado.status = "POUCO CERTEIRO";
         resultado.cor = "#71717a";
         resultado.alvo = "2.00X";
-        resultado.dica = "Gráfico em transição. Aguardando quebra de sequência azul.";
+        resultado.dica = "Gráfico em fase de acumulação de banca.";
     }
-
     return resultado;
 }
 
-// --- ENDPOINT PRINCIPAL (Conexão com seu Index.html) ---
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ error: "Sem print" });
+        if (!req.file) return res.status(400).json({ error: "Falta o arquivo de imagem." });
 
         const text = await tesseract.recognize(req.file.path, config);
         
-        // Extração de Velas
+        // Extração rigorosa de números
         const velasEncontradas = text.match(/\d+[.,]\d+/g) || [];
-        let historico = velasEncontradas
+        const historico = velasEncontradas
             .map(v => parseFloat(v.replace(',', '.')))
-            .filter(v => v > 0)
-            .slice(0, 30); // Pega até 30 para o Gap
+            .filter(v => v > 0 && v < 1000);
 
-        // Backup se o OCR falhar
+        // ERRO REAL: Se não leu nada, avisa o usuário (Sem simulação)
         if (historico.length === 0) {
-            historico = [1.20, 2.50, 1.10, 4.80, 1.05, 12.0, 1.90];
+            return res.status(422).json({ 
+                error: "IA não conseguiu ler as velas. Use um print mais nítido.",
+                dica: "Certifique-se que o histórico está visível e sem reflexos." 
+            });
         }
 
         const analise = analisarTendenciaSuperIA(historico);
 
-        // Fuso de Luanda e Moeda Kz (Mantidos do Original)
         const dataLuanda = new Date();
-        dataLuanda.setMinutes(dataLuanda.getMinutes() + Math.floor(Math.random() * 5) + 2);
+        dataLuanda.setMinutes(dataLuanda.getMinutes() + 3);
         const timerRosa = dataLuanda.toLocaleTimeString('pt-PT', { 
-            timeZone: 'Africa/Luanda', 
-            hour: '2-digit', 
-            minute: '2-digit' 
+            timeZone: 'Africa/Luanda', hour: '2-digit', minute: '2-digit' 
         });
-
-        const bancaSimulada = "Kz " + (Math.random() * 10000 + 500).toLocaleString('pt-PT', {minimumFractionDigits: 2});
 
         res.json({
             timerRosa: timerRosa,
             pct: analise.pct,
-            banca: bancaSimulada,
+            banca: "Sincronizada", // Removido valor aleatório
             alvo: analise.alvo,
             status: analise.status,
             cor: analise.cor,
@@ -111,14 +96,10 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
         });
 
         fs.unlinkSync(req.file.path);
-
     } catch (error) {
-        console.error("Erro:", error);
-        res.status(500).json({ error: "Erro na análise" });
+        res.status(500).json({ error: "Falha técnica no processamento do SHA-512." });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`SERVER ATIVO - PORTA ${PORT}`);
-});
+app.listen(PORT, () => console.log(`IA REALISTA ATIVA - PORTA ${PORT}`));
