@@ -1,11 +1,10 @@
-FROM node:18-slim
+FROM node:18
 
-# Instalar dependências de sistema para o Tesseract OCR
+# Instalação do motor Tesseract e idioma português para leitura precisa
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-por \
-    libtesseract-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean
 
 WORKDIR /app
 
@@ -16,4 +15,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
