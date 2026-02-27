@@ -7,12 +7,11 @@ const app = express();
 app.use(cors());
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Configuração original preservada + binário tesseract para velocidade
+// AJUSTE DE COMPATIBILIDADE: Removido o caminho fixo para evitar erro de conexão no Render
 const config = { 
   lang: "por", 
   oem: 1, 
-  psm: 3,
-  binary: "/usr/bin/tesseract" 
+  psm: 3
 };
 
 // BLOCO ACRESCENTADO: Auditoria de Status (Para verificação no Render)
@@ -49,10 +48,8 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
     let status, cor, gapMin, alvo, dica, pct;
 
-    // --- NOVA LÓGICA DE ASSERTIVIDADE SUPER INTELIGENTE (ACRESCENTADA NO TOPO) ---
-
+    // --- NOVA LÓGICA DE ASSERTIVIDADE SUPER INTELIGENTE ---
     if (gapRosa >= 60) {
-        // NOVO: 100% CERTEIRO
         status = "CERTEIRO"; 
         cor = "#db2777"; 
         gapMin = 1; 
@@ -60,7 +57,6 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
         dica = "Protocolo Luanda: Gap de 60 velas atingido. Ciclo Rosa Confirmado."; 
         pct = "100%";
     } else if (gapRoxa >= 30) {
-        // NOVO: 95% SINAL PROVÁVEL
         status = "SINAL PROVÁVEL"; 
         cor = "#7e22ce"; 
         gapMin = 2;
@@ -68,7 +64,6 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
         dica = "Padrão Breakout detetado após Gap de 30. Alta probabilidade confirmada."; 
         pct = "95%";
     } 
-    // --- MANUTENÇÃO INTEGRAL DA TUA LÓGICA ORIGINAL ABAIXO ---
     else if (tendencia === "RECOLHA" || velas.slice(0,2).some(v => v <= 1.10)) {
         status = "RECOLHA ATIVA"; cor = "#ef4444"; gapMin = 15; alvo = "ESPERAR";
         dica = "IA detetou drenagem do provedor. Não faça entradas agora."; pct = "5%";
@@ -88,7 +83,10 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     const timer = agora.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
 
     res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, dica, tendencia, corTendencia });
-  } catch (e) { res.status(500).send("Erro de Processamento"); }
+  } catch (e) { 
+    console.error("ERRO CRÍTICO IA:", e);
+    res.status(500).send("Erro de Processamento: " + e.message); 
+  }
 });
 
 app.listen(process.env.PORT || 3000);
