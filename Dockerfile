@@ -1,18 +1,11 @@
-FROM node:18
-
-# Instalar dependências e Tesseract OCR com pack de Português
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    tesseract-ocr-por \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
-
-EXPOSE 3000
-
-CMD ["node", "server.js"]
+{
+  "name": "ia-elite-luanda-v3",
+  "version": "3.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "node-tesseract-ocr": "^2.2.1",
+    "cors": "^2.8.5"
+  }
+}
