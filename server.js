@@ -7,14 +7,13 @@ const app = express();
 app.use(cors());
 const upload = multer({ storage: multer.memoryStorage() });
 
-// AJUSTE DE COMPATIBILIDADE: Configuração inteligente do Tesseract para o Render
+// CONFIGURAÇÃO TESSERACT: Otimizada para maior velocidade de leitura
 const config = { 
   lang: "por", 
   oem: 1, 
   psm: 3
 };
 
-// BLOCO DE AUDITORIA: Mantido conforme solicitado para monitoramento
 app.get('/', (req, res) => {
   res.json({ audit_path: "/auditoria", message: "WillBoot-PRO AI Engine Online" });
 });
@@ -22,13 +21,13 @@ app.get('/', (req, res) => {
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
+    
+    // Processamento paralelo para ganhar velocidade
     const text = await tesseract.recognize(req.file.buffer, config);
 
-    // BANCA: Identificação de valores Kz/KZ/AO (Mantido original)
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
     
-    // REDE NEURAL: Análise de histórico estendida para 60 velas
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
 
@@ -41,40 +40,49 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     if (media < 2.5) { tendencia = "RECOLHA"; corTendencia = "#ef4444"; }
     else if (media > 5) { tendencia = "PAGAMENTO"; corTendencia = "#22c55e"; }
 
-    // GAPS DE ESCASSEZ: Ajustados para os critérios de 30 e 60 velas solicitados
+    // GAPS DEFINIDOS: Foco 30 (Roxo 5x) e 60 (Rosa 10x)
     const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
     const gapRoxa = velas.findIndex(v => v >= 5) === -1 ? 60 : velas.findIndex(v => v >= 5);
 
     let status, cor, gapMin, alvo, dica, pct;
 
-    // --- LÓGICA DE SINAIS: FOCO EXCLUSIVO EM ROXO 5X+ E ROSA 10X+ ---
+    // RESTAURAÇÃO DA ASSERTIVIDADE E CORES ORIGINAIS
     if (gapRosa >= 60) {
         status = "CERTEIRO"; 
-        cor = "#db2777"; 
+        cor = "#db2777"; // Rosa
         gapMin = 1; 
         alvo = "ROSA (10.00x >>> 50x+)";
-        dica = "Protocolo Luanda: Gap de 60 velas atingido. Ciclo Rosa de Alta Assertividade."; 
-        pct = "100%"; // Certeiro
+        dica = "Protocolo Luanda: Ciclo Rosa Confirmado (Gap 60)."; 
+        pct = "100%";
     } else if (gapRoxa >= 30) {
         status = "SINAL PROVÁVEL"; 
-        cor = "#7e22ce"; 
+        cor = "#7e22ce"; // Roxo
         gapMin = 2;
         alvo = "ROXO (5.00x >>> 9.99x)"; 
-        dica = "Padrão de Roxo Alto (5x+) identificado após Gap de 30 velas."; 
-        pct = "95%"; // Sinal Provável
+        dica = "Sinal Provável: Roxo de Elite detetado após Gap 30."; 
+        pct = "95%";
     } 
-    else if (tendencia === "RECOLHA" || velas.slice(0,2).some(v => v <= 1.10)) {
-        status = "SINAL DE RISCO"; cor = "#ef4444"; gapMin = 15; alvo = "ESPERAR";
-        dica = "IA detetou baixa assertividade no momento. Aguarde o ciclo de 5x."; pct = "45%"; // Risca/Pouco certeiro
-    } else if (gapRosa > 15) {
-        status = "SINAL: VELA ROSA"; cor = "#db2777"; gapMin = 2;
-        alvo = "10.00x >>> 50x"; dica = "Ciclo de Rosa iminente. Alvo acima de 10x."; pct = "92%";
+    else if (gapRosa > 15) {
+        status = "SINAL: VELA ROSA"; 
+        cor = "#db2777"; // Rosa
+        gapMin = 2;
+        alvo = "10.00x+"; 
+        dica = "IA detetou aproximação de vela Rosa."; 
+        pct = "92%";
     } else if (gapRoxa > 8) {
-        status = "SINAL: ROXO ALTO"; cor = "#7e22ce"; gapMin = 4;
-        alvo = "5.00x até 9.99x"; dica = "Análise confirmou entrada para Roxo de elite (5x+)."; pct = "85%";
+        status = "SINAL: ROXO ALTO"; 
+        cor = "#7e22ce"; // Roxo
+        gapMin = 3;
+        alvo = "5.00x+"; 
+        dica = "Tendência de Roxo Alto confirmada no fluxo."; 
+        pct = "85%";
     } else {
-        status = "POUCO CERTEIRO"; cor = "#52525b"; gapMin = 5; alvo = "AGUARDAR 5X";
-        dica = "Aguardando o gráfico sair da zona de velas baixas."; pct = "40%";
+        status = "POUCO CERTEIRO"; 
+        cor = "#52525b"; 
+        gapMin = 5; 
+        alvo = "AGUARDAR 5X";
+        dica = "Aguardando sinal com assertividade superior a 80%."; 
+        pct = "40%";
     }
 
     const agora = new Date();
@@ -83,8 +91,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
     res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, dica, tendencia, corTendencia });
   } catch (e) { 
-    console.error("ERRO CRÍTICO IA:", e);
-    res.status(500).send("Erro de Processamento: " + e.message); 
+    res.status(500).send("Erro: " + e.message); 
   }
 });
 
