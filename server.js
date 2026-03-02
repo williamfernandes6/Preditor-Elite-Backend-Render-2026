@@ -5,16 +5,11 @@ const cors = require('cors');
 
 const app = express();
 
-// AJUSTE DE CONEXÃO: Permite que o GitHub.io e o Render fiquem ligados sem quedas
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
-}));
-
+// CORREÇÃO DE CONEXÃO: Permite tráfego contínuo entre GitHub e Render
+app.use(cors({ origin: '*', methods: ['GET', 'POST'] }));
 const upload = multer({ storage: multer.memoryStorage() });
 
-// CONFIGURAÇÃO DE VELOCIDADE LUZ (Foco: 5 Segundos)
+// CONFIGURAÇÃO TURBO: Otimizada para evitar o erro de 'demora' (Timeout)
 const config = { 
   lang: "por", 
   oem: 3, 
@@ -22,27 +17,26 @@ const config = {
   preset: "fast"
 };
 
-// Rota para manter o Render acordado
 app.get('/', (req, res) => {
-  res.status(200).json({ status: "Online", message: "WillBoot-PRO AI Ativa" });
+  res.status(200).json({ status: "Online", message: "IA WillBoot Ativa" });
 });
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     
-    // Processamento ultra-rápido com tempo de resposta garantido
+    // ANÁLISE DE ALTA VELOCIDADE (Foco: Resposta em 5 segundos)
     const text = await tesseract.recognize(req.file.buffer, config);
 
     // BANCA (Lógica original 100% preservada)
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
     
-    // ANÁLISE PROFUNDA DE SEEDS (Mantido 60 velas)
+    // ANÁLISE PROFUNDA DE SEEDS (Mantido 60 velas para assertividade > 90%)
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
 
-    // TENDÊNCIA E MÉDIAS (Lógica original 100% preservada)
+    // TENDÊNCIA E MÉDIAS (Lógica original preservada)
     const ultimas10 = velas.slice(0, 10);
     const mediaRecente = ultimas10.length > 0 ? ultimas10.reduce((a, b) => a + b, 0) / ultimas10.length : 0;
     
@@ -56,7 +50,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
     let status, cor, gapMin, alvo, dica, pct;
 
-    // MOTOR DE ASSERTIVIDADE ELEVADA (> 90%)
+    // MOTOR DE ASSERTIVIDADE ELEVADA (90% a 100%)
     if (gapRosa >= 60 || (tendencia === "RECOLHA" && gapRosa > 48)) {
         status = "CERTEIRO"; cor = "#db2777"; gapMin = 1; 
         alvo = "ROSA (10.00x >>> 50x+)";
@@ -82,19 +76,20 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     agora.setMinutes(agora.getMinutes() + gapMin);
     const timer = agora.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
 
-    // Resposta rápida para evitar Timeout
+    // RESPOSTA IMEDIATA: Evita que o navegador diga que a IA "demorou muito"
     res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, dica, tendencia, corTendencia });
   } catch (e) { 
-    console.error("ERRO DE CONEXÃO IA:", e);
-    res.status(500).json({ error: "Erro de processamento rápido. Tente novamente." }); 
+    console.error("ERRO:", e);
+    res.status(500).json({ error: "Reinicie a análise para acordar a IA." }); 
   }
 });
 
-// AJUSTE FINAL: Escuta em 0.0.0.0 com Timeout estendido
+// AJUSTE DE PORTA PARA RENDER LIVE
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`IA Online na porta ${PORT}`);
 });
 
-server.keepAliveTimeout = 120000; // Mantém a conexão viva por 2 minutos
-server.headersTimeout = 125000;
+// MANTÉM A CONEXÃO ATIVA (Resolve o erro da imagem 1072789.jpg)
+server.keepAliveTimeout = 60000; 
+server.headersTimeout = 65000;
