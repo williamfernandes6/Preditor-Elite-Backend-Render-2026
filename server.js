@@ -6,7 +6,12 @@ const cors = require('cors');
 const app = express();
 
 // CORREÇÃO DE CONEXÃO: Permite tráfego contínuo entre GitHub e Render
-app.use(cors({ origin: '*', methods: ['GET', 'POST'] }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
+
 const upload = multer({ storage: multer.memoryStorage() });
 
 // CONFIGURAÇÃO TURBO: Otimizada para evitar o erro de 'demora' (Timeout)
@@ -17,6 +22,7 @@ const config = {
   preset: "fast"
 };
 
+// Rota de Auditoria para manter o Render "Acordado"
 app.get('/', (req, res) => {
   res.status(200).json({ status: "Online", message: "IA WillBoot Ativa" });
 });
@@ -25,7 +31,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     
-    // ANÁLISE DE ALTA VELOCIDADE (Foco: Resposta em 5 segundos)
+    // Processamento de Alta Performance (Alvo: 5-10 segundos)
     const text = await tesseract.recognize(req.file.buffer, config);
 
     // BANCA (Lógica original 100% preservada)
@@ -76,20 +82,20 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     agora.setMinutes(agora.getMinutes() + gapMin);
     const timer = agora.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
 
-    // RESPOSTA IMEDIATA: Evita que o navegador diga que a IA "demorou muito"
+    // Resposta Imediata para evitar o erro da imagem 1072789.jpg
     res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, dica, tendencia, corTendencia });
   } catch (e) { 
-    console.error("ERRO:", e);
-    res.status(500).json({ error: "Reinicie a análise para acordar a IA." }); 
+    console.error("ERRO DE CONEXÃO IA:", e);
+    res.status(500).json({ error: "Erro de processamento rápido. Tente novamente." }); 
   }
 });
 
-// AJUSTE DE PORTA PARA RENDER LIVE
+// AJUSTE FINAL: Escuta Global e Timeout Estendido
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`IA Online na porta ${PORT}`);
+  console.log(`WillBoot-PRO IA Engine Online na porta ${PORT}`);
 });
 
-// MANTÉM A CONEXÃO ATIVA (Resolve o erro da imagem 1072789.jpg)
-server.keepAliveTimeout = 60000; 
-server.headersTimeout = 65000;
+// Mantém a conexão viva por mais tempo para evitar o erro de 'demora'
+server.keepAliveTimeout = 120000; 
+server.headersTimeout = 125000;
