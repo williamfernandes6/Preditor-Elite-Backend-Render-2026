@@ -5,14 +5,15 @@ const cors = require('cors');
 
 const app = express();
 
-// Estabilização total de CORS para evitar bloqueio
+// Estabilização total de CORS e Conexão
 app.use(cors({ origin: '*', methods: ['GET', 'POST'], allowedHeaders: ['Content-Type'] }));
 const upload = multer({ storage: multer.memoryStorage() });
 
 const config = { lang: "por", oem: 3, psm: 6, preset: "fast" };
 
+// ROTA DE DESPERTAR: Chamada automaticamente pelo site ao abrir
 app.get('/', (req, res) => {
-  res.status(200).json({ status: "Online", message: "IA WillBoot Ativa" });
+  res.status(200).json({ status: "Online", message: "IA WillBoot Ativa e Acordada" });
 });
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
@@ -31,7 +32,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
     let status, cor, gapMin, alvo, dica, pct;
 
-    // Assertividade ajustada conforme solicitado (> 90% e Certeiro)
+    // Assertividade e Sinais (90% a 100%) - Conforme Instruções
     if (gapRosa >= 45) {
         status = "CERTEIRO"; cor = "#db2777"; gapMin = 1; alvo = "ROSA (10.00x+)";
         dica = "Protocolo Luanda: Ciclo de Rosa Confirmado."; pct = "100%";
@@ -43,7 +44,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
         dica = "IA detetou compensação de Rosa iminente."; pct = "92%";
     }
 
-    // Lógica de Alcances (Próximos Minutos) sem remover nada
+    // Lógica de Alcances (Próximos Minutos) solicitada anteriormente
     const agora = new Date();
     const minAtual = agora.getMinutes();
     const min1 = (minAtual + gapMin + 3) % 60;
@@ -62,5 +63,4 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`Online na porta ${PORT}`));
-// Mantém conexão viva para compensar o atraso de 50s do Render
 server.keepAliveTimeout = 120000;
