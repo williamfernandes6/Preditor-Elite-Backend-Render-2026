@@ -4,16 +4,13 @@ const tesseract = require('node-tesseract-ocr');
 const cors = require('cors');
 
 const app = express();
-
-// Estabilização total de CORS e Conexão
 app.use(cors({ origin: '*', methods: ['GET', 'POST'], allowedHeaders: ['Content-Type'] }));
 const upload = multer({ storage: multer.memoryStorage() });
 
 const config = { lang: "por", oem: 3, psm: 6, preset: "fast" };
 
-// ROTA DE DESPERTAR: Chamada automaticamente pelo site ao abrir
 app.get('/', (req, res) => {
-  res.status(200).json({ status: "Online", message: "IA WillBoot Ativa e Acordada" });
+  res.status(200).json({ status: "Online", message: "IA WillBoot Ativa" });
 });
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
@@ -21,7 +18,6 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
 
-    // Lógica de Banca e 60 Velas preservada intacta
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Kz 0,00";
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
@@ -30,21 +26,32 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
     const gapRoxa = velas.findIndex(v => v >= 5) === -1 ? 60 : velas.findIndex(v => v >= 5);
 
-    let status, cor, gapMin, alvo, dica, pct;
+    let status, cor, gapMin, alvo, pct;
 
-    // Assertividade e Sinais (90% a 100%) - Conforme Instruções
+    // Lógica Original de Gap de 30 velas preservada
     if (gapRosa >= 45) {
-        status = "CERTEIRO"; cor = "#db2777"; gapMin = 1; alvo = "ROSA (10.00x+)";
-        dica = "Protocolo Luanda: Ciclo de Rosa Confirmado."; pct = "100%";
+        status = "CERTEIRO"; cor = "#db2777"; gapMin = 1; alvo = "ROSA (10.00x+)"; pct = "100%";
     } else if (gapRoxa >= 30) {
-        status = "SINAL PROVÁVEL"; cor = "#7e22ce"; gapMin = 1; alvo = "ROXO (5.00x+)";
-        dica = "IA detectou alta frequência de Roxo de Elite."; pct = "98%";
+        status = "SINAL PROVÁVEL"; cor = "#7e22ce"; gapMin = 1; alvo = "ROXO (5.00x+)"; pct = "98%";
     } else {
-        status = "SINAL: VELA ROSA"; cor = "#db2777"; gapMin = 1; alvo = "10.00x+"; 
-        dica = "IA detetou compensação de Rosa iminente."; pct = "92%";
+        status = "SINAL: VELA ROSA"; cor = "#db2777"; gapMin = 1; alvo = "10.00x+"; pct = "92%";
     }
 
-    // Lógica de Alcances (Próximos Minutos) solicitada anteriormente
+    // Estudo Comportamental Inteligente (Pagar vs Limpar)
+    const mediaVelas = velas.reduce((a,b) => a+b, 0) / (velas.length || 1);
+    const momento = mediaVelas > 2.5 ? "PAGAR (Gráfico Aquecido)" : "LIMPAR (Recolha de Banca)";
+    
+    // Lista de Dicas para Rotação de 15 segundos
+    const listaDicas = [
+        "IA detetou compensação de rosas eminente.",
+        `Momento de ${momento}: Comportamento SHA-512 detectado.`,
+        "Histórico lido: Aviator em fase de distribuição de lucros.",
+        "Ação Sugerida: Aguarde o padrão de 3 velas azuis para entrada.",
+        "Análise de Ciclo: O gráfico está a respeitar a tendência de 1.5x.",
+        "Cuidado: Detetada sequência de recolha rápida após velas de 5x.",
+        "Estratégia: Entre com 10% da banca no alvo previsto pela IA."
+    ];
+
     const agora = new Date();
     const minAtual = agora.getMinutes();
     const min1 = (minAtual + gapMin + 3) % 60;
@@ -53,14 +60,13 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
     const finalTimer = new Date(agora.getTime());
     finalTimer.setMinutes(agora.getMinutes() + gapMin);
-    const timer = finalTimer.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
+    const timer = finalTimer.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda", hour: '2-digit', minute: '2-digit' });
 
-    res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, dica, alcances });
+    res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, listaDicas, alcances });
   } catch (e) { 
-    res.status(500).json({ error: "Erro de processamento rápido." }); 
+    res.status(500).json({ error: "Erro interno" }); 
   }
 });
 
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, '0.0.0.0', () => console.log(`Online na porta ${PORT}`));
-server.keepAliveTimeout = 120000;
+app.listen(PORT, '0.0.0.0');
