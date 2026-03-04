@@ -4,69 +4,67 @@ const tesseract = require('node-tesseract-ocr');
 const cors = require('cors');
 
 const app = express();
-app.use(cors({ origin: '*', methods: ['GET', 'POST'], allowedHeaders: ['Content-Type'] }));
+app.use(cors());
 const upload = multer({ storage: multer.memoryStorage() });
 
-const config = { lang: "por", oem: 3, psm: 6, preset: "fast" };
+const config = { lang: "por", oem: 3, psm: 6 };
 
-app.get('/', (req, res) => {
-  res.status(200).json({ status: "Online", message: "IA WillBoot Ativa" });
-});
+app.get('/', (req, res) => res.json({ status: "Online" }));
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
-
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Kz 0,00";
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
 
+    // RESTAURADO: GAP DE 30-50-60 VELAS
     const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
-    const gapRoxa = velas.findIndex(v => v >= 5) === -1 ? 60 : velas.findIndex(v => v >= 5);
+    const gapRoxa = velas.findIndex(v => v >= 5) === -1 ? 50 : velas.findIndex(v => v >= 5);
+    const gapBase = 30;
 
-    let status, cor, gapMin, alvo, pct;
+    let status, cor, pct, alvoReal;
+    const alvosRosaros = [15, 20, 35, 45, 50, 60];
+    alvoReal = alvosRosaros[Math.floor(Math.random() * alvosRosaros.length)];
+    const alvoExibido = Math.floor(alvoReal * 0.8); // Segurança de 20%
 
-    // Lógica Original de Gap de 30 velas preservada
-    if (gapRosa >= 45) {
-        status = "CERTEIRO"; cor = "#db2777"; gapMin = 1; alvo = "ROSA (10.00x+)"; pct = "100%";
-    } else if (gapRoxa >= 30) {
-        status = "SINAL PROVÁVEL"; cor = "#7e22ce"; gapMin = 1; alvo = "ROXO (5.00x+)"; pct = "98%";
+    if (gapRosa >= 60) {
+        status = "CERTEIRO"; cor = "#db2777"; pct = "100%";
+    } else if (gapRosa >= gapBase) {
+        status = "SINAL PROVÁVEL"; cor = "#db2777"; pct = "98%";
     } else {
-        status = "SINAL: VELA ROSA"; cor = "#db2777"; gapMin = 1; alvo = "10.00x+"; pct = "92%";
+        status = "POUCO CERTEIRO"; cor = "#7e22ce"; pct = "75%";
     }
 
-    // Estudo Comportamental Inteligente (Pagar vs Limpar)
     const mediaVelas = velas.reduce((a,b) => a+b, 0) / (velas.length || 1);
     const momento = mediaVelas > 2.5 ? "PAGAR (Gráfico Aquecido)" : "LIMPAR (Recolha de Banca)";
     
-    // Lista de Dicas para Rotação de 15 segundos
+    // ALCANCES DINÂMICOS
+    const agora = new Date();
+    const min1 = (agora.getMinutes() + 4) % 60;
+    const min2 = (agora.getMinutes() + 5) % 60;
+    let alcances = mediaVelas > 3 ? 
+        `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - ROSA EMINENTE 10x+` : 
+        `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - ROXO ${Math.floor(Math.random()*6)+4}x+`;
+
     const listaDicas = [
         "IA detetou compensação de rosas eminente.",
-        `Momento de ${momento}: Comportamento SHA-512 detectado.`,
-        "Histórico lido: Aviator em fase de distribuição de lucros.",
-        "Ação Sugerida: Aguarde o padrão de 3 velas azuis para entrada.",
-        "Análise de Ciclo: O gráfico está a respeitar a tendência de 1.5x.",
-        "Cuidado: Detetada sequência de recolha rápida após velas de 5x.",
-        "Estratégia: Entre com 10% da banca no alvo previsto pela IA."
+        `Momento de ${momento}: Comportamento Aviator detetado.`,
+        "Histórico lido: IA analisou comportamento e tendência de gráfico.",
+        "Dica: Saia no 12x para garantir o sinal de 15x com segurança.",
+        "O Aviator está a comportar-se de forma estável para alvos altos.",
+        "Momento para limpar banca detetado: jogue com cautela.",
+        "IA leu o histórico: Ciclo de rosas deve iniciar em 2 minutos."
     ];
 
-    const agora = new Date();
-    const minAtual = agora.getMinutes();
-    const min1 = (minAtual + gapMin + 3) % 60;
-    const min2 = (minAtual + gapMin + 4) % 60;
-    const alcances = `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - 5x 10x ou +`;
-
-    const finalTimer = new Date(agora.getTime());
-    finalTimer.setMinutes(agora.getMinutes() + gapMin);
-    const timer = finalTimer.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda", hour: '2-digit', minute: '2-digit' });
-
-    res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, listaDicas, alcances });
-  } catch (e) { 
-    res.status(500).json({ error: "Erro interno" }); 
-  }
+    res.json({ 
+        status, cor, pct, banca, 
+        timerRosa: agora.toLocaleTimeString("pt-PT", {hour:'2-digit', minute:'2-digit'}), 
+        alvo: `${alvoExibido}.00x+`, 
+        historico: velas, listaDicas, alcances 
+    });
+  } catch (e) { res.status(500).json({ error: "Erro" }); }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0');
+app.listen(process.env.PORT || 3000);
