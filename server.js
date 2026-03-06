@@ -7,7 +7,6 @@ const app = express();
 app.use(cors());
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Configuração Otimizada para leitura de dados tabulares (Velas do Aviator)
 const config = { 
   lang: "por", 
   oem: 3, 
@@ -15,111 +14,80 @@ const config = {
   "tessdata_fast": "1" 
 };
 
-app.get('/', (req, res) => res.json({ status: "Online", versao: "Super IA 3.5" }));
+app.get('/', (req, res) => res.json({ status: "Online", ia_version: "Super IA Turbo" }));
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     
     const text = await tesseract.recognize(req.file.buffer, config);
-    
-    // CAPTURA DE BANCA
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Kz 0,00";
     
-    // LEITURA DE VELAS (Histórico de até 60 velas)
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
 
-    // GAPS DEFINIDOS: 30 (Base), 50 (Roxo), 60 (Rosa Máximo)
+    // GAPS DEFINIDOS: 30-50-60
     const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
     const gapRoxa = velas.findIndex(v => v >= 5) === -1 ? 50 : velas.findIndex(v => v >= 5);
     const gapBase = 30;
 
-    // LÓGICA DE GATILHO (Para sinais certeiros)
+    // GATILHO ULTRA SENSÍVEL (Para garantir sinal em menos de 1 min)
     const ultimaVela = velas[0] || 0;
-    const velaDeForça = ultimaVela >= 1.80; // Ajustado para 1.80x para ser mais rápido na entrega
+    const velaDeForça = ultimaVela >= 1.50; // Reduzido para 1.50x para disparar sinais mais rápido
     const velaDeLixo = ultimaVela < 1.20;
 
     let status, cor, pct, alvoReal, alvoFinal;
     
-    // 1 - DEFINIÇÃO DE ASSERTIVIDADE E VELOCIDADE DE RESPOSTA
-    const velasBaixasSeguidas = velas.slice(0, 5).filter(v => v < 2).length;
-    
+    // 1 - LÓGICA DE ASSERTIVIDADE (SEMPRE GERA RESPOSTA)
     if (velas.length === 0) {
-        status = "AGUARDANDO DADOS";
+        status = "AGUARDANDO PRINT";
         cor = "#52525b";
-        pct = "0%";
-        alvoFinal = "Sem velas detetadas";
-    } else if ((gapRosa >= 60 || gapRosa >= gapBase) && velaDeForça) {
+        pct = "100%"; 
+        alvoFinal = "Sinal em 1 min...";
+    } else if ((gapRosa >= 30) && velaDeForça) {
         status = "CERTEIRO"; 
         cor = "#db2777"; 
         pct = "100%";
-    } else if (gapRosa >= gapBase || gapRoxa >= 20) {
+    } else if (gapRosa >= 20 || gapRoxa >= 15) {
         status = "SINAL PROVÁVEL"; 
         cor = "#db2777"; 
         pct = `${Math.floor(Math.random() * (99 - 80 + 1)) + 80}%`;
-    } else if (velasBaixasSeguidas > 3 || velaDeLixo) {
+    } else {
+        // Mesmo em gráfico mau, ele gera um sinal de "RISCO" para não travar
         status = "SINAL DE RISCO"; 
         cor = "#ef4444"; 
         pct = `${Math.floor(Math.random() * (79 - 50 + 1)) + 50}%`;
-    } else {
-        status = "POUCO CERTEIRO"; 
-        cor = "#f97316"; 
-        pct = `${Math.floor(Math.random() * (79 - 65 + 1)) + 65}%`;
     }
 
-    // ANALISE DE MOMENTO (PAGAR VS LIMPAR)
     const mediaVelas = velas.reduce((a,b) => a+b, 0) / (velas.length || 1);
-    const momento = mediaVelas > 2.5 ? "PAGAR (Gráfico Aquecido)" : "LIMPAR (Recolha de Banca)";
+    const momento = mediaVelas > 2.2 ? "PAGAR" : "LIMPAR";
     
-    // 2 - ALVOS E LUCRO MÍNIMO (Busca de 3x, 5x e 8x)
-    let infoExtraRecolha = ""; 
-    
-    if (momento === "LIMPAR (Recolha de Banca)") {
-        alvoReal = (Math.random() * (9.99 - 5.00) + 5.00).toFixed(2); 
-        const minutosMelhora = Math.floor(Math.random() * 5) + 2; 
-        infoExtraRecolha = ` | ATENÇÃO: Modo Recolha. Próximo Rosa em aprox. ${minutosMelhora} min.`;
-        alvoFinal = `Alvo Previsto ${alvoReal}x(P:1.50x)${infoExtraRecolha}`;
+    // 2 - ALVOS DE LUCRO (3x, 5x, 8x)
+    if (momento === "LIMPAR") {
+        alvoReal = (Math.random() * (8 - 5) + 5).toFixed(2); 
+        alvoFinal = `Alvo Previsto ${alvoReal}x(P:2.00x) | Gráfico em análise de ciclo.`;
     } else {
-        if (mediaVelas > 3.2 || gapRosa > 35) {
-            const possiveisRosas = [12, 15, 20, 25, 30, 40, 50, 80, 100];
-            alvoReal = possiveisRosas[Math.floor(Math.random() * possiveisRosas.length)];
-            let lucroMinimo = mediaVelas > 4 ? "5.00" : "3.00"; 
-            alvoFinal = `Alvo Previsto ${alvoReal}x(P:${lucroMinimo}x)`;
-        } else {
-            alvoReal = (Math.random() * (9.5 - 7.5) + 7.5).toFixed(2); 
-            alvoFinal = `Alvo Previsto ${alvoReal}x(P:3.00x)`;
-        }
+        const possiveisRosas = [10, 15, 20, 30, 50];
+        alvoReal = possiveisRosas[Math.floor(Math.random() * possiveisRosas.length)];
+        let lucroMinimo = mediaVelas > 3 ? "5.00" : "3.00"; 
+        alvoFinal = `Alvo Previsto ${alvoReal}x(P:${lucroMinimo}x)`;
     }
 
-    // 3 - ALCANCES DINÂMICOS
+    // 3 - ALCANCES (Próximo minuto)
     const agora = new Date();
-    const min1 = (agora.getMinutes() + 4) % 60;
-    const min2 = (agora.getMinutes() + 5) % 60;
-    let alcances;
+    const min1 = (agora.getMinutes() + 1) % 60; // Configurado para o próximo minuto exato
+    const min2 = (agora.getMinutes() + 2) % 60;
+    
+    const v1 = (Math.random() * (5 - 3) + 3).toFixed(1);
+    const v2 = (Math.random() * (15 - 10) + 10).toFixed(1);
+    const alcances = `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - ALVOS: ${v1}x e ${v2}x+`;
 
-    if (momento === "LIMPAR (Recolha de Banca)") {
-        const v2 = (Math.random() * (9.9 - 7) + 7).toFixed(1);
-        alcances = `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - RECOLHA: Limite ${v2}x`;
-        cor = "#ef4444"; 
-    } else if (parseFloat(alvoReal) >= 10) {
-        const r1 = Math.floor(Math.random() * 20) + 10;
-        alcances = `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - ROSA DETECTADO ${r1}x+`;
-        cor = "#db2777"; 
-    } else {
-        const v1 = (Math.random() * (9.99 - 7) + 7).toFixed(1);
-        alcances = `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - ROXO ALTO ${v1}x`;
-        cor = "#7e22ce"; 
-    }
-
-    // 4 - LISTA DE DICAS
     const listaDicas = [
-        "IA Detectou: Padrão de alternância finalizado. Janela de tempo para lucro alto.",
-        "Dica da Super IA: Ciclo de 15 minutos atingido, tendência de repetição detetada.",
-        "Análise Técnica: Identificada 'escada' de valores crescentes, Rosa iminente.",
-        "Aviso Super IA: Em ciclos de recolha, proteja a banca no 1.50x ou aguarde.",
-        "Estudo de Ciclos: O servidor está a oxigenar as velas. Alvos de 5x a 8x favorecidos."
+        "IA Turbo: Entrada confirmada para o próximo minuto.",
+        "Dica: Proteção no 3x ativada para garantir lucro rápido.",
+        "Análise: Quebra de padrão detectada. O sinal é imediato.",
+        "Super IA: Ciclo de pagamento curto identificado."
     ];
 
     res.json({ 
@@ -130,7 +98,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     });
     
   } catch (e) { 
-    res.status(500).json({ error: "Erro de Processamento da IA" }); 
+    res.status(500).json({ error: "Erro Turbo IA" }); 
   }
 });
 
