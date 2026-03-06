@@ -4,50 +4,58 @@ const tesseract = require('node-tesseract-ocr');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+app.use(cors()); // Permite a comunicação com o seu site
 const upload = multer({ storage: multer.memoryStorage() });
 
+// CONFIGURAÇÃO DE VELOCIDADE DA IA
 const config = { 
   lang: "por", 
   oem: 3, 
   psm: 6,
-  "tessdata_fast": "1" 
+  "tessdata_fast": "1" // Motor de alta velocidade para resposta rápida
 };
 
+// Rota de Status para o UptimeRobot e para a "bolinha" do site
 app.get('/', (req, res) => res.json({ status: "Online" }));
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
     const text = await tesseract.recognize(req.file.buffer, config);
+    
+    // Captura de Banca
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Kz 0,00";
+    
+    // Captura de Histórico (Até 60 velas)
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
 
-    // RESTAURADO EXATAMENTE: GAP DE 30-50-60 VELAS
+    // REGRAS DE GAP ORIGINAIS: 30-50-60 VELAS
     const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
     const gapRoxa = velas.findIndex(v => v >= 5) === -1 ? 50 : velas.findIndex(v => v >= 5);
     const gapBase = 30;
 
     let status, cor, pct, alvoReal, alvoFinal;
     
-    // REGRAS DE ASSERTIVIDADE (Conforme sua memória de 05/02)
+    // ASSERTIVIDADE (Conforme sua regra de 05/02)
     if (gapRosa >= 60 || (velas.length > 10 && velas[0] < 2 && velas[1] < 2)) {
         status = "CERTEIRO"; 
-        cor = "#db2777"; 
+        cor = "#db2777"; // Rosa
         pct = "100%";
     } else if (gapRosa >= gapBase) {
         status = "SINAL PROVÁVEL"; 
-        cor = "#db2777"; 
+        cor = "#db2777"; // Rosa
         pct = `${Math.floor(Math.random() * (99 - 80 + 1)) + 80}%`;
     } else {
-        status = "POUCO CERTEIRO"; // Conforme sua regra para < 80%
-        cor = "#7e22ce"; 
+        // Abaixo de 80% conforme sua ordem
+        status = "POUCO CERTEIRO"; 
+        cor = "#7e22ce"; // Roxo
         pct = `${Math.floor(Math.random() * (79 - 60 + 1)) + 60}%`;
     }
 
     const mediaVelas = velas.reduce((a,b) => a+b, 0) / (velas.length || 1);
     
+    // ALVO DINÂMICO
     if (mediaVelas > 3 || gapRosa > 40) {
         const alvosAltos = [12, 15, 20, 25, 30, 35, 45, 50, 60, 80, 100];
         alvoReal = alvosAltos[Math.floor(Math.random() * alvosAltos.length)];
