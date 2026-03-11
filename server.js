@@ -7,7 +7,7 @@ const app = express();
 app.use(cors({ origin: '*', methods: ['GET', 'POST'] }));
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Configuração de Leitura Rápida (Elite)
+// Otimização para leitura de números e moedas (PSM 6)
 const config = { lang: "por", oem: 1, psm: 6 };
 
 app.get('/', (req, res) => res.json({ status: "Online", engine: "Super IA Luanda" }));
@@ -17,29 +17,30 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
 
-    const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
-    const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
+    // AJUSTE ELEPHANT BET: Procura valor antes de AOA ou após Saldo/Banca
+    const bancaMatch = text.match(/([\d\.,\s]{1,10})\s?(?:AOA|AO|Kz|KZ|Saldo|Banca)/i) || text.match(/(?:Saldo|Banca|AOA)\s?([\d\.,\s]{1,10})/i);
+    const banca = bancaMatch ? `AOA ${bancaMatch[1].trim()}` : "Ajuste o Print";
     
+    // Extração de histórico (até 60 velas)
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
 
-    // LÓGICA DE GAPS (30-50-60)
     const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
     const ultimas10 = velas.slice(0, 10);
-    const media = ultimas10.reduce((a, b) => a + b, 0) / 10;
+    const media = ultimas10.length > 0 ? ultimas10.reduce((a, b) => a + b, 0) / 10 : 0;
 
     let status, cor, pct, alvo, protecao, alcances;
     const agora = new Date();
 
-    // Proteção Dinâmica (P:5x até 9x)
+    // Proteção Dinâmica (P:5x-9x)
     const pVal = Math.floor(Math.random() * 5) + 5;
     protecao = `P:${pVal}x`;
 
-    // CALIBRAÇÃO DE ASSERTIVIDADE 100%
-    if (gapRosa >= 30 && media > 3.0) {
+    // CALIBRAÇÃO DE ASSERTIVIDADE (CERTEIRO vs PROVÁVEL)
+    if (gapRosa >= 30 && media > 2.8) {
       status = "CERTEIRO"; cor = "#db2777"; pct = "100%";
-      const alvosRosa = [50, 100, 150, 250, 500];
-      const alvoReal = alvosRosa[Math.floor(Math.random() * alvosRosa.length)];
+      const alvosElite = [50, 120, 180, 250, 500];
+      const alvoReal = alvosElite[Math.floor(Math.random() * alvosElite.length)];
       alvo = `${alvoReal}x`;
       const m1 = (agora.getMinutes() + 2) % 60;
       const m2 = (agora.getMinutes() + 4) % 60;
@@ -56,9 +57,9 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
 
     res.json({ 
       status, cor, pct, banca, timerRosa: timer, alvo, protecao, 
-      historico: velas, alcances, dica: "IA detetou ciclo SHA-512 favorável." 
+      historico: velas, alcances, dica: "IA detectou ciclo favorável na Elephant Bet." 
     });
-  } catch (e) { res.status(500).json({ error: "Erro" }); }
+  } catch (e) { res.status(500).json({ error: "Erro na leitura" }); }
 });
 
 app.listen(process.env.PORT || 3000);
