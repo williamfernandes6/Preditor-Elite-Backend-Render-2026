@@ -1,18 +1,8 @@
 FROM node:18-slim
-
-# Instala o motor de leitura Tesseract para Português
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    tesseract-ocr-por \
-    && apt-get clean
-
+RUN apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-por && apt-get clean
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm install
-
 COPY . .
-
 EXPOSE 3000
-
 CMD ["node", "server.js"]
