@@ -1,10 +1,11 @@
-FROM node:18
+FROM node:18-slim
 
-# Instalar Tesseract OCR e pacotes de idioma Português
+# Instala o Tesseract OCR e pacotes de idiomas
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-por \
-    && rm -rf /var/lib/apt/lists/*
+    libtesseract-dev \
+    && apt-get clean
 
 WORKDIR /app
 
