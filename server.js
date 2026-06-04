@@ -1,4 +1,4 @@
-Server.js:const express = require('express');
+const express = require('express');
 const multer = require('multer');
 const tesseract = require('node-tesseract-ocr');
 const cors = require('cors');
@@ -9,12 +9,17 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const config = { lang: "por", oem: 1, psm: 3 };
 
+// NOVA ROTA: Criada especificamente para o front-end verificar se o Render está acordado
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: "alive" });
+});
+
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
 
-    // CORREÇÃO DA BANCA: Procura por Kz, KZ, AO ou AOA seguido de números
+    // CORREÇÃO DA BANCA: Aplicadas as crases corretas para evitar travamento do Node
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
     
