@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const config = { lang: "por", oem: 1, psm: 3 };
 
-// NOVA ROTA: Criada especificamente para o front-end verificar se o Render está acordado
+// Rota de monitorização do Render
 app.get('/health', (req, res) => {
   res.status(200).json({ status: "alive" });
 });
@@ -19,14 +19,12 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
 
-    // CORREÇÃO DA BANCA: Aplicadas as crases corretas para evitar travamento do Node
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
     const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
     
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
     const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 25);
 
-    // CÁLCULO DE TENDÊNCIA (Média das últimas 10 velas)
     const ultimas10 = velas.slice(0, 10);
     const media = ultimas10.length > 0 ? ultimas10.reduce((a, b) => a + b, 0) / ultimas10.length : 0;
     
@@ -39,20 +37,20 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 25 : velas.findIndex(v => v >= 10);
     const gapRoxa = velas.findIndex(v => v >= 5 && v < 10) === -1 ? 25 : velas.findIndex(v => v >= 5 && v < 10);
 
-    let status, cor, gapMin, alvo, dica, pct;
+    let status, cor, gapMin, alvo, dica, pct, alvoNumerico;
 
-    // Lógica IA de Elite
+    // Estrutura de Assertividade Inteligente Conforme as Regras de Negócio
     if (tendencia === "RECOLHA" || velas.slice(0,2).some(v => v <= 1.10)) {
-        status = "RECOLHA ATIVA"; cor = "#ef4444"; gapMin = 15; alvo = "ESPERAR";
+        status = "pouco certeiro"; cor = "#ef4444"; gapMin = 15; alvo = "ESPERAR"; alvoNumerico = 0;
         dica = "IA detetou drenagem do provedor. Não faça entradas agora."; pct = "5%";
-    } else if (gapRosa > 15 || (gapRosa > 8 && tendencia === "PAGAMENTO")) {
-        status = "SINAL: VELA ROSA"; cor = "#db2777"; gapMin = 2;
-        alvo = "10.00x >>> 50x"; dica = "Momento de Pago Detetado! Ciclo de Rosa Confirmado."; pct = "94%";
+    } else if (gapRosa > 30 || (gapRosa > 8 && tendencia === "PAGAMENTO")) {
+        status = "certeiro"; cor = "#db2777"; gapMin = 2;
+        alvo = "10.00x"; alvoNumerico = 10.00; dica = "Momento de Pago Detetado! Ciclo de Rosa Confirmado."; pct = "100%";
     } else if (gapRoxa > 6) {
-        status = "SINAL: ROXO ALTO"; cor = "#7e22ce"; gapMin = 4;
-        alvo = "5.00x+"; dica = "Tendência favorável para alavancagem média."; pct = "82%";
+        status = "sinal provável"; cor = "#7e22ce"; gapMin = 4;
+        alvo = "5.00x"; alvoNumerico = 5.00; dica = "Tendência favorável para alavancagem média."; pct = "85%";
     } else {
-        status = "ANALISANDO"; cor = "#52525b"; gapMin = 5; alvo = "2.00x";
+        status = "pouco certeiro"; cor = "#52525b"; gapMin = 5; alvo = "2.00x"; alvoNumerico = 2.00;
         dica = "Aguardando o gráfico sair da zona de 1x."; pct = "45%";
     }
 
@@ -60,7 +58,7 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     agora.setMinutes(agora.getMinutes() + gapMin);
     const timer = agora.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
 
-    res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, dica, tendencia, corTendencia });
+    res.json({ status, cor, pct, banca, timerRosa: timer, alvo, alvoNumerico, historico: velas, dica, tendencia, corTendencia });
   } catch (e) { res.status(500).send("Erro de Processamento"); }
 });
 
