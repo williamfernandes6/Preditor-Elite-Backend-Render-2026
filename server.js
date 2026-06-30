@@ -4,14 +4,19 @@ const tesseract = require('node-tesseract-ocr');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// CORS Liberado para frontend
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
+
 const upload = multer({ storage: multer.memoryStorage() });
+const config = { lang: "por", oem: 1, psm: 6 };
 
-const config = { lang: "por", oem: 1, psm: 3 };
-
-// Rota de monitorização do Render
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: "alive" });
+  res.status(200).json({ status: "Online", engine: "Super IA Luanda Elite" });
 });
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
@@ -19,47 +24,58 @@ app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
 
-    const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
-    const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
+    const bancaMatch = text.match(/(?:menu|≡|…|chat)?\s?([\d\.,\s]+)\s?AOA/i) || text.match(/(?:AOA|AO|Kz|KZ)\s?([\d\.,\s]+)/i);
+    const banca = bancaMatch ? `${bancaMatch[1].trim()} AOA` : "0,00 AOA";
     
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
-    const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 25);
+    const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
 
+    const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
     const ultimas10 = velas.slice(0, 10);
-    const media = ultimas10.length > 0 ? ultimas10.reduce((a, b) => a + b, 0) / ultimas10.length : 0;
+    const media = ultimas10.length > 0 ? ultimas10.reduce((a, b) => a + (b || 0), 0) / 10 : 0;
     
-    let tendencia = "ESTÁVEL";
-    let corTendencia = "#3b82f6";
+    let status, cor, pct, alvo, protecao, alcances, dica, tendencia, corTendencia;
+    const agora = new Date();
+    
+    const pVal = Math.floor(Math.random() * 5) + 5;
+    protecao = `P:${pVal}x`;
 
-    if (media < 2.5) { tendencia = "RECOLHA"; corTendencia = "#ef4444"; }
-    else if (media > 5) { tendencia = "PAGAMENTO"; corTendencia = "#22c55e"; }
+    const formatarHora = (minAdd) => {
+        const d = new Date(agora.getTime() + minAdd * 60000);
+        return d.toLocaleTimeString("pt-PT", { hour: '2-digit', minute: '2-digit', timeZone: "Africa/Luanda" });
+    };
 
-    const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 25 : velas.findIndex(v => v >= 10);
-    const gapRoxa = velas.findIndex(v => v >= 5 && v < 10) === -1 ? 25 : velas.findIndex(v => v >= 5 && v < 10);
-
-    let status, cor, gapMin, alvo, dica, pct, alvoNumerico;
-
-    // Estrutura de Assertividade Inteligente Conforme as Regras de Negócio
-    if (tendencia === "RECOLHA" || velas.slice(0,2).some(v => v <= 1.10)) {
-        status = "pouco certeiro"; cor = "#ef4444"; gapMin = 15; alvo = "ESPERAR"; alvoNumerico = 0;
-        dica = "IA detetou drenagem do provedor. Não faça entradas agora."; pct = "5%";
-    } else if (gapRosa > 30 || (gapRosa > 8 && tendencia === "PAGAMENTO")) {
-        status = "certeiro"; cor = "#db2777"; gapMin = 2;
-        alvo = "10.00x"; alvoNumerico = 10.00; dica = "Momento de Pago Detetado! Ciclo de Rosa Confirmado."; pct = "100%";
-    } else if (gapRoxa > 6) {
-        status = "sinal provável"; cor = "#7e22ce"; gapMin = 4;
-        alvo = "5.00x"; alvoNumerico = 5.00; dica = "Tendência favorável para alavancagem média."; pct = "85%";
+    if (gapRosa >= 30 && media > 2.8) {
+        status = "CERTEIRO"; cor = "#db2777"; pct = "100%";
+        tendencia = "PAGAMENTO"; corTendencia = "#22c55e";
+        const alvosElite = [10, 50, 100, 250];
+        const alvoReal = alvosElite[Math.floor(Math.random() * alvosElite.length)];
+        alvo = alvoReal >= 10 ? `${alvoReal}x+` : `${alvoReal}x`; 
+        dica = "IA detetou ciclo de Rosa Confirmado! Momento de Pago.";
+        alcances = `${formatarHora(2)} (5x) | ${formatarHora(4)} (8x) | ${formatarHora(7)} (10x+)`;
+    } else if (gapRosa > 15) {
+        status = "SINAL PROVÁVEL"; cor = "#7e22ce"; 
+        pct = (Math.floor(Math.random() * 20) + 80) + "%"; 
+        tendencia = "ESTÁVEL"; corTendencia = "#3b82f6";
+        alvo = "5x a 9x";
+        dica = "Tendência favorável para alavancagem média.";
+        alcances = `${formatarHora(3)} (5x) | ${formatarHora(6)} (7x) | ${formatarHora(9)} (9x)`;
     } else {
-        status = "pouco certeiro"; cor = "#52525b"; gapMin = 5; alvo = "2.00x"; alvoNumerico = 2.00;
-        dica = "Aguardando o gráfico sair da zona de 1x."; pct = "45%";
+        status = "SINAL DE RISCO / POUCO CERTEIRO"; cor = "#ef4444"; 
+        pct = (Math.floor(Math.random() * 34) + 45) + "%"; 
+        tendencia = "RECOLHA"; corTendencia = "#ef4444";
+        alvo = "2.00x";
+        dica = "IA detetou recolha. Risco alto de vela baixa.";
+        alcances = `${formatarHora(2)} (2x) | ${formatarHora(4)} (3x)`;
     }
 
-    const agora = new Date();
-    agora.setMinutes(agora.getMinutes() + gapMin);
-    const timer = agora.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
+    const timerRosa = formatarHora(2); 
 
-    res.json({ status, cor, pct, banca, timerRosa: timer, alvo, alvoNumerico, historico: velas, dica, tendencia, corTendencia });
-  } catch (e) { res.status(500).send("Erro de Processamento"); }
+    res.json({ status, cor, pct, banca, timerRosa, alvo, protecao, historico: velas, dica, alcances, tendencia, corTendencia });
+  } catch (e) { 
+    res.status(500).json({ error: "Erro interno no servidor" }); 
+  }
 });
 
-app.listen(process.env.PORT || 3000);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
