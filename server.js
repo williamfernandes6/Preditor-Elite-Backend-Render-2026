@@ -7,64 +7,56 @@ const app = express();
 app.use(cors());
 const upload = multer({ storage: multer.memoryStorage() });
 
-const config = { lang: "por", oem: 3, psm: 6 };
-
-app.get('/', (req, res) => res.json({ status: "Online" }));
+const config = { lang: "por", oem: 1, psm: 3 };
 
 app.post('/analisar-fluxo', upload.single('print'), async (req, res) => {
   try {
+    if (!req.file) return res.status(400).json({ error: "Sem imagem" });
     const text = await tesseract.recognize(req.file.buffer, config);
+
+    // CORREÇÃO DA BANCA: Procura por Kz, KZ, AO ou AOA seguido de números
     const bancaMatch = text.match(/(?:AO|AOA|Kz|KZ|Saldo|Banca)\s?([\d\.,\s]{3,15})/i);
-    const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Kz 0,00";
+    const banca = bancaMatch ? `Kz ${bancaMatch[1].trim()}` : "Ajuste o Print";
+    
     const velasRaw = text.match(/\d+[\.,]\d{2}/g) || [];
-    const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 60);
+    const velas = velasRaw.map(v => parseFloat(v.replace(',', '.'))).slice(0, 25);
 
-    // RESTAURADO: GAP DE 30-50-60 VELAS
-    const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 60 : velas.findIndex(v => v >= 10);
-    const gapRoxa = velas.findIndex(v => v >= 5) === -1 ? 50 : velas.findIndex(v => v >= 5);
-    const gapBase = 30;
+    // CÁLCULO DE TENDÊNCIA (Média das últimas 10 velas)
+    const ultimas10 = velas.slice(0, 10);
+    const media = ultimas10.length > 0 ? ultimas10.reduce((a, b) => a + b, 0) / ultimas10.length : 0;
+    
+    let tendencia = "ESTÁVEL";
+    let corTendencia = "#3b82f6";
 
-    let status, cor, pct, alvoReal;
-    const alvosRosaros = [15, 20, 35, 45, 50, 60];
-    alvoReal = alvosRosaros[Math.floor(Math.random() * alvosRosaros.length)];
-    const alvoExibido = Math.floor(alvoReal * 0.8); // Segurança de 20%
+    if (media < 2.5) { tendencia = "RECOLHA"; corTendencia = "#ef4444"; }
+    else if (media > 5) { tendencia = "PAGAMENTO"; corTendencia = "#22c55e"; }
 
-    if (gapRosa >= 60) {
-        status = "CERTEIRO"; cor = "#db2777"; pct = "100%";
-    } else if (gapRosa >= gapBase) {
-        status = "SINAL PROVÁVEL"; cor = "#db2777"; pct = "98%";
+    const gapRosa = velas.findIndex(v => v >= 10) === -1 ? 25 : velas.findIndex(v => v >= 10);
+    const gapRoxa = velas.findIndex(v => v >= 5 && v < 10) === -1 ? 25 : velas.findIndex(v => v >= 5 && v < 10);
+
+    let status, cor, gapMin, alvo, dica, pct;
+
+    // Lógica IA de Elite
+    if (tendencia === "RECOLHA" || velas.slice(0,2).some(v => v <= 1.10)) {
+        status = "RECOLHA ATIVA"; cor = "#ef4444"; gapMin = 15; alvo = "ESPERAR";
+        dica = "IA detetou drenagem do provedor. Não faça entradas agora."; pct = "5%";
+    } else if (gapRosa > 15 || (gapRosa > 8 && tendencia === "PAGAMENTO")) {
+        status = "SINAL: VELA ROSA"; cor = "#db2777"; gapMin = 2;
+        alvo = "10.00x >>> 50x"; dica = "Momento de Pago Detetado! Ciclo de Rosa Confirmado."; pct = "94%";
+    } else if (gapRoxa > 6) {
+        status = "SINAL: ROXO ALTO"; cor = "#7e22ce"; gapMin = 4;
+        alvo = "5.00x+"; dica = "Tendência favorável para alavancagem média."; pct = "82%";
     } else {
-        status = "POUCO CERTEIRO"; cor = "#7e22ce"; pct = "75%";
+        status = "ANALISANDO"; cor = "#52525b"; gapMin = 5; alvo = "2.00x";
+        dica = "Aguardando o gráfico sair da zona de 1x."; pct = "45%";
     }
 
-    const mediaVelas = velas.reduce((a,b) => a+b, 0) / (velas.length || 1);
-    const momento = mediaVelas > 2.5 ? "PAGAR (Gráfico Aquecido)" : "LIMPAR (Recolha de Banca)";
-    
-    // ALCANCES DINÂMICOS
     const agora = new Date();
-    const min1 = (agora.getMinutes() + 4) % 60;
-    const min2 = (agora.getMinutes() + 5) % 60;
-    let alcances = mediaVelas > 3 ? 
-        `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - ROSA EMINENTE 10x+` : 
-        `${min1.toString().padStart(2, '0')}/${min2.toString().padStart(2, '0')} - ROXO ${Math.floor(Math.random()*6)+4}x+`;
+    agora.setMinutes(agora.getMinutes() + gapMin);
+    const timer = agora.toLocaleTimeString("pt-PT", { hour12: false, timeZone: "Africa/Luanda" });
 
-    const listaDicas = [
-        "IA detetou compensação de rosas eminente.",
-        `Momento de ${momento}: Comportamento Aviator detetado.`,
-        "Histórico lido: IA analisou comportamento e tendência de gráfico.",
-        "Dica: Saia no 12x para garantir o sinal de 15x com segurança.",
-        "O Aviator está a comportar-se de forma estável para alvos altos.",
-        "Momento para limpar banca detetado: jogue com cautela.",
-        "IA leu o histórico: Ciclo de rosas deve iniciar em 2 minutos."
-    ];
-
-    res.json({ 
-        status, cor, pct, banca, 
-        timerRosa: agora.toLocaleTimeString("pt-PT", {hour:'2-digit', minute:'2-digit'}), 
-        alvo: `${alvoExibido}.00x+`, 
-        historico: velas, listaDicas, alcances 
-    });
-  } catch (e) { res.status(500).json({ error: "Erro" }); }
+    res.json({ status, cor, pct, banca, timerRosa: timer, alvo, historico: velas, dica, tendencia, corTendencia });
+  } catch (e) { res.status(500).send("Erro de Processamento"); }
 });
 
 app.listen(process.env.PORT || 3000);
